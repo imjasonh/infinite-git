@@ -2,60 +2,38 @@
 
 A Git HTTP server that generates a new commit every time someone pulls from the repository.
 
-## Features
+## Try it out
 
-- Implements Git smart HTTP protocol for read-only access
-- Generates a unique commit on every pull/clone operation
-- Thread-safe commit generation
-- Persistent Git repository on disk
-- Structured logging with slog
+Clone the repo
 
-## Installation
-
-```bash
-go install github.com/imjasonh/infinite-git/cmd/infinite-git@latest
+```sh
+git clone https://infinite-git-nd2dq3gc7a-uk.a.run.app/ /tmp/infinite-git && cd /tmp/infinite-git
 ```
 
-Or build from source:
+Pull, and just keep pulling:
 
-```bash
-git clone https://github.com/imjasonh/infinite-git
-cd infinite-git
-go build -o infinite-git ./cmd/infinite-git
+```
+$ git pull
+warning: no common commits
+Unpacking objects: 100% (40/40), 4.14 KiB | 847.00 KiB/s, done.
+From https://infinite-git-nd2dq3gc7a-uk.a.run.app
+   df979d4..d483466  main       -> origin/main
+Updating df979d4..d483466
+Fast-forward
+ hello.txt | 4 ++--
+ 1 file changed, 2 insertions(+), 2 deletions(-)
+$ git pull
+warning: no common commits
+Unpacking objects: 100% (43/43), 4.45 KiB | 912.00 KiB/s, done.
+From https://infinite-git-nd2dq3gc7a-uk.a.run.app
+   d483466..47f0fcb  main       -> origin/main
+Updating d483466..47f0fcb
+Fast-forward
+ hello.txt | 4 ++--
+ 1 file changed, 2 insertions(+), 2 deletions(-)
 ```
 
-## Usage
-
-Start the server:
-
-```bash
-infinite-git
-```
-
-Configuration via environment variables:
-- `PORT`: HTTP server port (default: "8080")
-- `REPO_PATH`: Path to Git repository (default: "./infinite-repo")
-
-Example:
-```bash
-PORT=3000 REPO_PATH=/tmp/my-infinite-repo infinite-git
-```
-
-Logging is configured via the standard clog environment variables.
-
-## Testing
-
-Clone the repository:
-```bash
-git clone http://localhost:8080
-```
-
-Every time you pull, you'll get a new commit:
-```bash
-cd <cloned-repo>
-git pull origin main
-# New commit appears!
-```
+.....and so on.
 
 ## How It Works
 
@@ -67,13 +45,6 @@ git pull origin main
 4. The updated refs are sent to the client
 5. The client receives the new commit as part of the normal Git protocol flow
 
-## Implementation Details
+## Why?
 
-- Uses Git plumbing commands (`git add`, `git commit`) to create commits
-- Implements pkt-line format for Git protocol communication
-- Delegates object transfer to `git upload-pack` for efficiency
-- Rejects all push attempts with 403 Forbidden
-
-## License
-
-MIT
+I think it's neat!
