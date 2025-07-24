@@ -2,8 +2,6 @@ package main
 
 import (
 	"fmt"
-	"io"
-	"log/slog"
 	"net/http/httptest"
 	"os"
 	"path/filepath"
@@ -29,9 +27,7 @@ func TestCloneAndPull(t *testing.T) {
 		t.Fatalf("failed to create server repo: %v", err)
 	}
 
-	// Create server with silent logger
-	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
-	srv := server.New(serverRepo, logger)
+	srv := server.New(serverRepo)
 
 	// Start test server
 	ts := httptest.NewServer(srv.Handler())
@@ -120,9 +116,7 @@ func TestConcurrentPulls(t *testing.T) {
 		t.Fatalf("failed to create server repo: %v", err)
 	}
 
-	// Create server with silent logger
-	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
-	srv := server.New(serverRepo, logger)
+	srv := server.New(serverRepo)
 
 	// Start test server
 	ts := httptest.NewServer(srv.Handler())
@@ -207,9 +201,7 @@ func TestPushRejection(t *testing.T) {
 		t.Fatalf("failed to create server repo: %v", err)
 	}
 
-	// Create server with silent logger
-	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
-	srv := server.New(serverRepo, logger)
+	srv := server.New(serverRepo)
 
 	// Start test server
 	ts := httptest.NewServer(srv.Handler())

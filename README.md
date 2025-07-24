@@ -32,15 +32,16 @@ Start the server:
 infinite-git
 ```
 
-Options:
-- `-addr`: HTTP server address (default: ":8080")
-- `-repo`: Path to Git repository (default: "./infinite-repo")
-- `-log-level`: Log level - debug, info, warn, error (default: "info")
+Configuration via environment variables:
+- `PORT`: HTTP server port (default: "8080")
+- `REPO_PATH`: Path to Git repository (default: "./infinite-repo")
 
 Example:
 ```bash
-infinite-git -addr :3000 -repo /tmp/my-infinite-repo -log-level debug
+PORT=3000 REPO_PATH=/tmp/my-infinite-repo infinite-git
 ```
+
+Logging is configured via the standard clog environment variables.
 
 ## Testing
 

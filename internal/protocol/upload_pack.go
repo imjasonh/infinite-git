@@ -27,9 +27,8 @@ func (u *UploadPack) HandleRequest(r io.Reader, w io.Writer) error {
 	reader := pktline.NewReader(r)
 	writer := pktline.NewWriter(w)
 
-	// Read want/have lines
+	// Read want lines first
 	var wants []string
-	var haves []string
 	var capabilities []string
 
 	for {
@@ -38,7 +37,7 @@ func (u *UploadPack) HandleRequest(r io.Reader, w io.Writer) error {
 			break // flush-pkt
 		}
 		if err != nil {
-			return fmt.Errorf("reading request: %w", err)
+			return fmt.Errorf("reading wants: %w", err)
 		}
 
 		if strings.HasPrefix(line, "want ") {
@@ -51,19 +50,71 @@ func (u *UploadPack) HandleRequest(r io.Reader, w io.Writer) error {
 			if len(parts) > 1 && len(capabilities) == 0 {
 				capabilities = strings.Split(parts[1], " ")
 			}
-		} else if strings.HasPrefix(line, "have ") {
-			haves = append(haves, line[5:])
-		} else if line == "done" {
-			break
 		}
 	}
 
-	// For now, we'll send all requested objects without negotiation
-	// In a real implementation, we'd use the "have" list to optimize
+	// Now handle negotiation phase
+	// The client may send:
+	// 1. "done" immediately (for clone)
+	// 2. "have" lines followed by flush, then we NAK, then more haves or done
 
-	// Send NAK (we don't have any of the client's objects)
+	for {
+		// Read lines until we get a flush or done
+		var haves []string
+		gotDone := false
+
+		for {
+			line, err := reader.ReadString()
+			if err == io.EOF {
+				// Flush packet - end of this batch
+				break
+			}
+			if err != nil {
+				return fmt.Errorf("reading negotiation: %w", err)
+			}
+
+			if line == "done" {
+				gotDone = true
+				break
+			} else if strings.HasPrefix(line, "have ") {
+				haves = append(haves, line[5:])
+			} else if line != "" {
+				return fmt.Errorf("unexpected line in negotiation: %q", line)
+			}
+		}
+
+		// If we got done, we're finished
+		if gotDone {
+			break
+		}
+
+		// If we got haves, send NAK and continue
+		if len(haves) > 0 {
+			if err := writer.WriteString("NAK\n"); err != nil {
+				return fmt.Errorf("writing NAK: %w", err)
+			}
+			if err := writer.Flush(); err != nil {
+				return fmt.Errorf("flushing NAK: %w", err)
+			}
+		} else if !gotDone {
+			// Empty flush without haves or done - client expects NAK
+			if err := writer.WriteString("NAK\n"); err != nil {
+				return fmt.Errorf("writing NAK for empty flush: %w", err)
+			}
+			if err := writer.Flush(); err != nil {
+				return fmt.Errorf("flushing NAK: %w", err)
+			}
+		}
+	}
+
+	// Read the flush after "done"
+	if _, err := reader.ReadString(); err != io.EOF {
+		return fmt.Errorf("expected flush after done")
+	}
+
+	// Send final NAK before packfile
 	if err := writer.WriteString("NAK\n"); err != nil {
-		return fmt.Errorf("writing NAK: %w", err)
+		return fmt.Errorf("writing final NAK: %w", err)
 	}
 
 	// Check if client supports side-band

@@ -5,12 +5,14 @@ import (
 	"net/http"
 	"strings"
 
+	"github.com/chainguard-dev/clog"
 	"github.com/imjasonh/infinite-git/internal/pktline"
 	"github.com/imjasonh/infinite-git/internal/protocol"
 )
 
 // handleInfoRefs handles the reference discovery phase.
 func (s *Server) handleInfoRefs(w http.ResponseWriter, r *http.Request) {
+	log := clog.FromContext(r.Context())
 	service := r.URL.Query().Get("service")
 
 	// Only support git-upload-pack (fetch/clone)
@@ -25,12 +27,12 @@ func (s *Server) handleInfoRefs(w http.ResponseWriter, r *http.Request) {
 	s.mu.Unlock()
 
 	if err != nil {
-		s.logger.Error("failed to generate commit", "error", err)
+		log.Error("failed to generate commit", "error", err)
 		http.Error(w, "Internal server error", http.StatusInternalServerError)
 		return
 	}
 
-	s.logger.Info("generated new commit", "sha", commitSHA, "counter", s.generator.GetCounter())
+	log.Info("generated new commit", "sha", commitSHA, "counter", s.generator.GetCounter())
 
 	// Set headers
 	w.Header().Set("Content-Type", fmt.Sprintf("application/x-%s-advertisement", service))
@@ -41,18 +43,18 @@ func (s *Server) handleInfoRefs(w http.ResponseWriter, r *http.Request) {
 
 	// Service declaration
 	if err := pw.Writef("# service=%s\n", service); err != nil {
-		s.logger.Error("failed to write service line", "error", err)
+		log.Error("failed to write service line", "error", err)
 		return
 	}
 	if err := pw.Flush(); err != nil {
-		s.logger.Error("failed to write flush", "error", err)
+		log.Error("failed to write flush", "error", err)
 		return
 	}
 
 	// Get current refs
 	refs, err := s.repo.GetRefs()
 	if err != nil {
-		s.logger.Error("failed to get refs", "error", err)
+		log.Error("failed to get refs", "error", err)
 		http.Error(w, "Internal server error", http.StatusInternalServerError)
 		return
 	}
@@ -64,13 +66,13 @@ func (s *Server) handleInfoRefs(w http.ResponseWriter, r *http.Request) {
 	for ref, oid := range refs {
 		if first {
 			if err := pw.Writef("%s %s\x00%s\n", oid, ref, capabilities); err != nil {
-				s.logger.Error("failed to write ref with capabilities", "error", err)
+				log.Error("failed to write ref with capabilities", "error", err)
 				return
 			}
 			first = false
 		} else {
 			if err := pw.Writef("%s %s\n", oid, ref); err != nil {
-				s.logger.Error("failed to write ref", "error", err)
+				log.Error("failed to write ref", "error", err)
 				return
 			}
 		}
@@ -78,13 +80,14 @@ func (s *Server) handleInfoRefs(w http.ResponseWriter, r *http.Request) {
 
 	// Final flush
 	if err := pw.Flush(); err != nil {
-		s.logger.Error("failed to write final flush", "error", err)
+		log.Error("failed to write final flush", "error", err)
 		return
 	}
 }
 
 // handleUploadPack handles the pack upload phase.
 func (s *Server) handleUploadPack(w http.ResponseWriter, r *http.Request) {
+	log := clog.FromContext(r.Context())
 	if r.Method != "POST" {
 		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
 		return
@@ -99,10 +102,10 @@ func (s *Server) handleUploadPack(w http.ResponseWriter, r *http.Request) {
 
 	// Process the request
 	if err := up.HandleRequest(r.Body, w); err != nil {
-		s.logger.Error("upload-pack failed", "error", err)
+		log.Error("upload-pack failed", "error", err)
 		// Don't send HTTP error here as we may have already started writing response
 		return
 	}
 
-	s.logger.Info("completed upload-pack")
+	log.Info("completed upload-pack")
 }

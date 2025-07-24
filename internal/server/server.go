@@ -1,10 +1,10 @@
 package server
 
 import (
-	"log/slog"
 	"net/http"
 	"sync"
 
+	"github.com/chainguard-dev/clog"
 	"github.com/imjasonh/infinite-git/internal/generator"
 	"github.com/imjasonh/infinite-git/internal/repo"
 )
@@ -14,15 +14,13 @@ type Server struct {
 	repo      *repo.Repository
 	generator *generator.Generator
 	mu        sync.Mutex
-	logger    *slog.Logger
 }
 
 // New creates a new Git HTTP server.
-func New(r *repo.Repository, logger *slog.Logger) *Server {
+func New(r *repo.Repository) *Server {
 	return &Server{
 		repo:      r,
 		generator: generator.New(r),
-		logger:    logger,
 	}
 }
 
@@ -44,7 +42,8 @@ func (s *Server) Handler() http.Handler {
 // logMiddleware logs HTTP requests.
 func (s *Server) logMiddleware(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		s.logger.Info("request",
+		log := clog.FromContext(r.Context())
+		log.Info("request",
 			"method", r.Method,
 			"path", r.URL.Path,
 			"query", r.URL.RawQuery,
@@ -56,7 +55,8 @@ func (s *Server) logMiddleware(next http.Handler) http.Handler {
 
 // handleReceivePack rejects push operations.
 func (s *Server) handleReceivePack(w http.ResponseWriter, r *http.Request) {
-	s.logger.Info("rejecting push attempt", "path", r.URL.Path)
+	log := clog.FromContext(r.Context())
+	log.Info("rejecting push attempt", "path", r.URL.Path)
 	http.Error(w, "Push access denied", http.StatusForbidden)
 }
 

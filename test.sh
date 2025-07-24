@@ -1,5 +1,8 @@
 #!/bin/bash
-set -e
+set -ex
+
+# Enable Git packet tracing for debugging
+export GIT_TRACE_PACKET=1
 
 # Cleanup function
 cleanup() {
@@ -12,8 +15,11 @@ cleanup() {
 # Trap EXIT to ensure cleanup happens
 trap cleanup EXIT
 
+# Kill any existing server in case it was not cleaned up
+lsof -ti:9876 | xargs kill -9 2>/dev/null || true
+
 echo "Starting infinite-git server..."
-go run . -addr :9876 -repo /tmp/test-infinite-git &
+PORT=9876 REPO_PATH=/tmp/test-infinite-git go run . &
 SERVER_PID=$!
 
 # Give server time to start
@@ -43,10 +49,6 @@ echo "Files after second pull:"
 ls -la
 
 echo "Checking commits..."
-git log --oneline
-
-# Test directory cleanup
-cd /
-rm -rf "$TEST_DIR"
+git --no-pager log --oneline
 
 echo "Test complete!"
