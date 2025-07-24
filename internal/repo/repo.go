@@ -91,15 +91,24 @@ func (r *Repository) createInitialCommit() error {
 	readmeContent := []byte("# Infinite Git Repository\n\nThis repository generates a new commit every time you pull.\n")
 
 	// Create blob for README
-	blob := object.NewBlob(readmeContent)
-	blobHash, err := object.Write(r.gitDir, blob)
+	readmeBlob := object.NewBlob(readmeContent)
+	readmeBlobHash, err := object.Write(r.gitDir, readmeBlob)
 	if err != nil {
-		return fmt.Errorf("writing blob: %w", err)
+		return fmt.Errorf("writing README blob: %w", err)
 	}
 
-	// Create tree with README
+	// Create initial hello.txt content
+	helloContent := []byte("Pull #0\nTimestamp: Initial commit\n")
+	helloBlob := object.NewBlob(helloContent)
+	helloBlobHash, err := object.Write(r.gitDir, helloBlob)
+	if err != nil {
+		return fmt.Errorf("writing hello.txt blob: %w", err)
+	}
+
+	// Create tree with README and hello.txt
 	tree := object.NewTree()
-	tree.AddEntry("100644", "README.md", blobHash)
+	tree.AddEntry("100644", "README.md", readmeBlobHash)
+	tree.AddEntry("100644", "hello.txt", helloBlobHash)
 	treeHash, err := object.Write(r.gitDir, tree)
 	if err != nil {
 		return fmt.Errorf("writing tree: %w", err)
@@ -124,10 +133,15 @@ func (r *Repository) createInitialCommit() error {
 		return fmt.Errorf("updating ref: %w", err)
 	}
 
-	// Also write README to working directory
+	// Also write README and hello.txt to working directory
 	readmePath := filepath.Join(r.path, "README.md")
 	if err := os.WriteFile(readmePath, readmeContent, 0644); err != nil {
 		return fmt.Errorf("writing README to working directory: %w", err)
+	}
+
+	helloPath := filepath.Join(r.path, "hello.txt")
+	if err := os.WriteFile(helloPath, helloContent, 0644); err != nil {
+		return fmt.Errorf("writing hello.txt to working directory: %w", err)
 	}
 
 	return nil

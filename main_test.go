@@ -5,6 +5,7 @@ import (
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"strings"
 	"sync"
 	"testing"
 
@@ -89,10 +90,17 @@ func TestCloneAndPull(t *testing.T) {
 			t.Errorf("expected %d commits after pull %d, got %d", initialCount+i+1, i+1, newCount)
 		}
 
-		// Verify new files exist
-		expectedFile := filepath.Join(clientRepoDir, fmt.Sprintf("pull_%d.txt", i+1))
-		if _, err := os.Stat(expectedFile); os.IsNotExist(err) {
-			t.Errorf("expected file %s does not exist", expectedFile)
+		// Verify hello.txt exists and has been updated
+		helloFile := filepath.Join(clientRepoDir, "hello.txt")
+		content, err := os.ReadFile(helloFile)
+		if err != nil {
+			t.Errorf("failed to read hello.txt: %v", err)
+		} else {
+			// Clone increments counter to 1, so first pull is #2, second is #3, etc.
+			expectedContent := fmt.Sprintf("Pull #%d\n", i+2)
+			if !strings.Contains(string(content), expectedContent) {
+				t.Errorf("hello.txt does not contain expected content %q, got: %s", expectedContent, content)
+			}
 		}
 	}
 

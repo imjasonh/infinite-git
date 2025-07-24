@@ -63,26 +63,28 @@ func (g *Generator) GenerateCommit() (string, error) {
 	// Parse existing tree entries
 	existingEntries := parseTree(parentTreeData)
 
-	// Create new file content
-	filename := fmt.Sprintf("pull_%d.txt", count)
-	content := fmt.Sprintf("Pull request #%d\nTimestamp: %s\n", count, time.Now().Format(time.RFC3339))
+	// Create updated hello.txt content with nanosecond precision
+	filename := "hello.txt"
+	content := fmt.Sprintf("Pull #%d\nTimestamp: %s\n", count, time.Now().Format("2006-01-02 15:04:05.999999999"))
 
-	// Create blob for new file
+	// Create blob for updated file
 	blob := object.NewBlob([]byte(content))
 	blobHash, err := g.repo.WriteObject(blob)
 	if err != nil {
 		return "", fmt.Errorf("writing blob: %w", err)
 	}
 
-	// Create new tree with all existing entries plus new file
+	// Create new tree with all existing entries, replacing hello.txt
 	tree := object.NewTree()
 
-	// Add existing entries
+	// Add existing entries, but skip hello.txt as we'll add the updated one
 	for _, entry := range existingEntries {
-		tree.AddEntry(entry.Mode, entry.Name, entry.Hash)
+		if entry.Name != filename {
+			tree.AddEntry(entry.Mode, entry.Name, entry.Hash)
+		}
 	}
 
-	// Add new file
+	// Add updated hello.txt
 	tree.AddEntry("100644", filename, blobHash)
 
 	treeHash, err := g.repo.WriteObject(tree)
