@@ -147,8 +147,9 @@ func (r *Reader) ReadObject() (objType int, data []byte, err error) {
 		return 0, nil, err
 	}
 
-	// Read compressed data
-	zr, err := zlib.NewReader(bytes.NewReader(r.data[r.offset:]))
+	// Wrap the remaining data in a counting reader to track compressed bytes consumed.
+	cr := &countingReader{reader: bytes.NewReader(r.data[r.offset:])}
+	zr, err := zlib.NewReader(cr)
 	if err != nil {
 		return 0, nil, fmt.Errorf("creating decompressor: %w", err)
 	}
@@ -159,13 +160,23 @@ func (r *Reader) ReadObject() (objType int, data []byte, err error) {
 		return 0, nil, fmt.Errorf("decompressing object: %w", err)
 	}
 
-	// Update offset past compressed data
-	// This is tricky - we need to figure out how much compressed data we read
-	// For now, we'll use a simple approach and skip this optimization
-	// In a real implementation, we'd track the compressed size properly
-	// For now, just consume the rest
-	var buf bytes.Buffer
-	io.Copy(&buf, zr)
+	// Drain the zlib reader so cr.n reflects all compressed bytes consumed.
+	io.Copy(io.Discard, zr)
+
+	// Advance offset past the compressed data.
+	r.offset += int(cr.n)
 
 	return objType, data, nil
+}
+
+// countingReader wraps an io.Reader and counts bytes read.
+type countingReader struct {
+	reader io.Reader
+	n      int64
+}
+
+func (c *countingReader) Read(p []byte) (int, error) {
+	n, err := c.reader.Read(p)
+	c.n += int64(n)
+	return n, err
 }

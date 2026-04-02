@@ -157,11 +157,30 @@ func (r *Repository) GitDir() string {
 	return r.gitDir
 }
 
+// Lock acquires the repository mutex. Use this to perform atomic
+// read-modify-write operations spanning multiple repo calls.
+func (r *Repository) Lock() { r.mu.Lock() }
+
+// Unlock releases the repository mutex.
+func (r *Repository) Unlock() { r.mu.Unlock() }
+
 // GetRefs returns the current refs in the repository.
 func (r *Repository) GetRefs() (map[string]string, error) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 
+	return r.getRefs()
+}
+
+// GetRefsLocked is the unlocked implementation of GetRefs.
+// Caller must already hold r.mu via Lock().
+func (r *Repository) GetRefsLocked() (map[string]string, error) {
+	return r.getRefs()
+}
+
+// getRefs is the internal unlocked implementation of GetRefs.
+// Caller must hold r.mu.
+func (r *Repository) getRefs() (map[string]string, error) {
 	refs := make(map[string]string)
 
 	// Read refs from refs directory
