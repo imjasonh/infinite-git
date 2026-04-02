@@ -23,12 +23,20 @@ func New(r *repo.Repository) *Generator {
 }
 
 // GenerateCommit creates a new commit and updates the main branch.
+// It holds the repo lock for the entire read-modify-write cycle to
+// prevent concurrent generates from reading the same parent.
 func (g *Generator) GenerateCommit() (string, error) {
 	// Increment counter atomically
 	count := atomic.AddInt64(&g.counter, 1)
 
-	// Get current HEAD commit
-	refs, err := g.repo.GetRefs()
+	// Hold the repo lock for the entire operation to prevent races.
+	g.repo.Lock()
+	defer g.repo.Unlock()
+
+	// Get current HEAD commit (use exported method is fine since
+	// getRefs is called internally, but we already hold the lock,
+	// so we call the unexported version via GetRefsLocked).
+	refs, err := g.repo.GetRefsLocked()
 	if err != nil {
 		return "", fmt.Errorf("getting refs: %w", err)
 	}

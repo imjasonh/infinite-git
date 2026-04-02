@@ -22,9 +22,7 @@ func (s *Server) handleInfoRefs(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Generate a new commit before advertising refs
-	s.mu.Lock()
 	commitSHA, err := s.generator.GenerateCommit()
-	s.mu.Unlock()
 
 	if err != nil {
 		log.Error("failed to generate commit", "error", err)
@@ -51,31 +49,19 @@ func (s *Server) handleInfoRefs(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Get current refs
-	refs, err := s.repo.GetRefs()
-	if err != nil {
-		log.Error("failed to get refs", "error", err)
-		http.Error(w, "Internal server error", http.StatusInternalServerError)
+	// Use the commitSHA directly from GenerateCommit rather than re-reading
+	// refs. This avoids a race where concurrent requests could all see the
+	// same latest ref, and ensures HEAD is always advertised first.
+	capabilities := strings.Join(s.repo.GetCapabilities(), " ")
+
+	// Advertise HEAD first (Git protocol requirement), then refs/heads/main.
+	if err := pw.Writef("%s HEAD\x00%s\n", commitSHA, capabilities); err != nil {
+		log.Error("failed to write HEAD ref", "error", err)
 		return
 	}
-
-	// Write capabilities with first ref
-	capabilities := strings.Join(s.repo.GetCapabilities(), " ")
-	first := true
-
-	for ref, oid := range refs {
-		if first {
-			if err := pw.Writef("%s %s\x00%s\n", oid, ref, capabilities); err != nil {
-				log.Error("failed to write ref with capabilities", "error", err)
-				return
-			}
-			first = false
-		} else {
-			if err := pw.Writef("%s %s\n", oid, ref); err != nil {
-				log.Error("failed to write ref", "error", err)
-				return
-			}
-		}
+	if err := pw.Writef("%s refs/heads/main\n", commitSHA); err != nil {
+		log.Error("failed to write main ref", "error", err)
+		return
 	}
 
 	// Final flush
