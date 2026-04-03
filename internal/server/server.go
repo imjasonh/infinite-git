@@ -17,10 +17,10 @@ type Server struct {
 }
 
 // New creates a new Git HTTP server.
-func New(r *repo.Repository) *Server {
+func New(r *repo.Repository, provider generator.ContentProvider) *Server {
 	return &Server{
 		repo:      r,
-		generator: generator.New(r),
+		generator: generator.New(r, provider),
 	}
 }
 
