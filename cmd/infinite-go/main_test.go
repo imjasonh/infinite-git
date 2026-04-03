@@ -132,81 +132,10 @@ func TestGoGetE2E(t *testing.T) {
 	}
 }
 
-// TestGoGet clones the infinite-go server repeatedly using git (which is what
-// `go get` does under the hood with GOPROXY=direct) and verifies that each
-// clone produces a valid, buildable Go package with a unique PullTime.
-func TestGoGet(t *testing.T) {
-	goBin, err := exec.LookPath("go")
-	if err != nil {
-		t.Skip("go binary not found in PATH")
-	}
-	gitBin, err := exec.LookPath("git")
-	if err != nil {
-		t.Skip("git binary not found in PATH")
-	}
-
-	modulePath := "example.com/infinite-go"
-	ts := newGoTestServer(t, modulePath)
-
-	var pullTimes []string
-
-	for i := 0; i < 3; i++ {
-		cloneDir := t.TempDir()
-
-		// Clone via git — this is exactly what `go get` with GOPROXY=direct does.
-		cmd := exec.Command(gitBin, "clone", ts.URL, cloneDir)
-		out, err := cmd.CombinedOutput()
-		if err != nil {
-			t.Fatalf("git clone #%d failed: %v\noutput: %s", i+1, err, out)
-		}
-
-		// Verify go.mod has the right module path.
-		goMod, err := os.ReadFile(filepath.Join(cloneDir, "go.mod"))
-		if err != nil {
-			t.Fatalf("clone #%d: failed to read go.mod: %v", i+1, err)
-		}
-		if !strings.Contains(string(goMod), fmt.Sprintf("module %s", modulePath)) {
-			t.Fatalf("clone #%d: go.mod has wrong module path: %s", i+1, goMod)
-		}
-
-		// Verify the package builds.
-		cmd = exec.Command(goBin, "build", "./...")
-		cmd.Dir = cloneDir
-		out, err = cmd.CombinedOutput()
-		if err != nil {
-			t.Fatalf("clone #%d: go build failed: %v\noutput: %s", i+1, err, out)
-		}
-
-		// Read pulltime.go and extract the PullTime declaration.
-		data, err := os.ReadFile(filepath.Join(cloneDir, "pulltime.go"))
-		if err != nil {
-			t.Fatalf("clone #%d: failed to read pulltime.go: %v", i+1, err)
-		}
-		for _, line := range strings.Split(string(data), "\n") {
-			if strings.Contains(line, "var PullTime") {
-				pullTimes = append(pullTimes, strings.TrimSpace(line))
-				t.Logf("clone #%d: %s", i+1, strings.TrimSpace(line))
-				break
-			}
-		}
-	}
-
-	if len(pullTimes) != 3 {
-		t.Fatalf("expected 3 PullTime values, got %d", len(pullTimes))
-	}
-
-	// Every clone must produce a unique PullTime.
-	seen := make(map[string]bool)
-	for i, pt := range pullTimes {
-		if seen[pt] {
-			t.Errorf("clone #%d returned duplicate PullTime: %s", i+1, pt)
-		}
-		seen[pt] = true
-	}
-}
-
-// TestGoGetPull verifies that git pull on an already-cloned repo also
-// produces a new PullTime.
+// TestGoGetPull clones and then pulls repeatedly using the git CLI,
+// verifying each pull produces a buildable Go package with a unique PullTime.
+// This always runs (no privileged port needed) as a fallback for environments
+// where TestGoGetE2E is skipped.
 func TestGoGetPull(t *testing.T) {
 	goBin, err := exec.LookPath("go")
 	if err != nil {
