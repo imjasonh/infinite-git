@@ -11,14 +11,16 @@ import (
 
 // Generator creates new commits on demand.
 type Generator struct {
-	repo    *repo.Repository
-	counter int64
+	repo     *repo.Repository
+	counter  int64
+	provider ContentProvider
 }
 
 // New creates a new commit generator.
-func New(r *repo.Repository) *Generator {
+func New(r *repo.Repository, provider ContentProvider) *Generator {
 	return &Generator{
-		repo: r,
+		repo:     r,
+		provider: provider,
 	}
 }
 
@@ -71,29 +73,29 @@ func (g *Generator) GenerateCommit() (string, error) {
 	// Parse existing tree entries
 	existingEntries := parseTree(parentTreeData)
 
-	// Create updated hello.txt content with nanosecond precision
-	filename := "hello.txt"
-	content := fmt.Sprintf("Pull #%d\nTimestamp: %s\n", count, time.Now().Format("2006-01-02 15:04:05.999999999"))
+	// Generate files from content provider
+	now := time.Now()
+	generatedFiles := g.provider.GenerateFiles(count, now)
 
-	// Create blob for updated file
-	blob := object.NewBlob([]byte(content))
-	blobHash, err := g.repo.WriteObject(blob)
-	if err != nil {
-		return "", fmt.Errorf("writing blob: %w", err)
-	}
-
-	// Create new tree with all existing entries, replacing hello.txt
+	// Create new tree with existing entries, replacing any generated files
 	tree := object.NewTree()
 
-	// Add existing entries, but skip hello.txt as we'll add the updated one
+	// Add existing entries, skipping any that will be replaced
 	for _, entry := range existingEntries {
-		if entry.Name != filename {
+		if _, replaced := generatedFiles[entry.Name]; !replaced {
 			tree.AddEntry(entry.Mode, entry.Name, entry.Hash)
 		}
 	}
 
-	// Add updated hello.txt
-	tree.AddEntry("100644", filename, blobHash)
+	// Add generated files
+	for name, content := range generatedFiles {
+		blob := object.NewBlob(content)
+		blobHash, err := g.repo.WriteObject(blob)
+		if err != nil {
+			return "", fmt.Errorf("writing blob for %s: %w", name, err)
+		}
+		tree.AddEntry("100644", name, blobHash)
+	}
 
 	treeHash, err := g.repo.WriteObject(tree)
 	if err != nil {
@@ -101,7 +103,7 @@ func (g *Generator) GenerateCommit() (string, error) {
 	}
 
 	// Create commit
-	commitMsg := fmt.Sprintf("Pull #%d at %s", count, time.Now().Format("2006-01-02 15:04:05"))
+	commitMsg := g.provider.CommitMessage(count, now)
 	commit := object.NewCommit(
 		treeHash,
 		parentHash,

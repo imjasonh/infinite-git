@@ -20,7 +20,8 @@ type Repository struct {
 }
 
 // New creates or opens a Git repository at the given path.
-func New(path string) (*Repository, error) {
+// initialFiles specifies the files to include in the initial commit.
+func New(path string, initialFiles map[string][]byte) (*Repository, error) {
 	repo := &Repository{
 		path:   path,
 		gitDir: filepath.Join(path, ".git"),
@@ -39,7 +40,7 @@ func New(path string) (*Repository, error) {
 		}
 
 		// Create initial commit
-		if err := repo.createInitialCommit(); err != nil {
+		if err := repo.createInitialCommit(initialFiles); err != nil {
 			return nil, fmt.Errorf("creating initial commit: %w", err)
 		}
 	}
@@ -86,35 +87,29 @@ func (r *Repository) init() error {
 }
 
 // createInitialCommit creates the first commit in the repository.
-func (r *Repository) createInitialCommit() error {
-	// Create README content
-	readmeContent := []byte("# Infinite Git Repository\n\nThis repository generates a new commit every time you pull.\n")
-
-	// Create blob for README
-	readmeBlob := object.NewBlob(readmeContent)
-	readmeBlobHash, err := object.Write(r.gitDir, readmeBlob)
-	if err != nil {
-		return fmt.Errorf("writing README blob: %w", err)
-	}
-
-	// Create initial hello.txt content
-	helloContent := []byte("Pull #0\nTimestamp: Initial commit\n")
-	helloBlob := object.NewBlob(helloContent)
-	helloBlobHash, err := object.Write(r.gitDir, helloBlob)
-	if err != nil {
-		return fmt.Errorf("writing hello.txt blob: %w", err)
-	}
-
-	// Create tree with README and hello.txt
+func (r *Repository) createInitialCommit(files map[string][]byte) error {
 	tree := object.NewTree()
-	tree.AddEntry("100644", "README.md", readmeBlobHash)
-	tree.AddEntry("100644", "hello.txt", helloBlobHash)
+
+	for name, content := range files {
+		blob := object.NewBlob(content)
+		blobHash, err := object.Write(r.gitDir, blob)
+		if err != nil {
+			return fmt.Errorf("writing blob for %s: %w", name, err)
+		}
+		tree.AddEntry("100644", name, blobHash)
+
+		// Also write to working directory
+		filePath := filepath.Join(r.path, name)
+		if err := os.WriteFile(filePath, content, 0644); err != nil {
+			return fmt.Errorf("writing %s to working directory: %w", name, err)
+		}
+	}
+
 	treeHash, err := object.Write(r.gitDir, tree)
 	if err != nil {
 		return fmt.Errorf("writing tree: %w", err)
 	}
 
-	// Create commit
 	commit := object.NewCommit(
 		treeHash,
 		"", // No parent for initial commit
@@ -127,21 +122,9 @@ func (r *Repository) createInitialCommit() error {
 		return fmt.Errorf("writing commit: %w", err)
 	}
 
-	// Update refs/heads/main
 	refPath := filepath.Join(r.gitDir, "refs", "heads", "main")
 	if err := os.WriteFile(refPath, []byte(commitHash+"\n"), 0644); err != nil {
 		return fmt.Errorf("updating ref: %w", err)
-	}
-
-	// Also write README and hello.txt to working directory
-	readmePath := filepath.Join(r.path, "README.md")
-	if err := os.WriteFile(readmePath, readmeContent, 0644); err != nil {
-		return fmt.Errorf("writing README to working directory: %w", err)
-	}
-
-	helloPath := filepath.Join(r.path, "hello.txt")
-	if err := os.WriteFile(helloPath, helloContent, 0644); err != nil {
-		return fmt.Errorf("writing hello.txt to working directory: %w", err)
 	}
 
 	return nil

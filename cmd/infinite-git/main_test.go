@@ -17,22 +17,22 @@ import (
 	"github.com/imjasonh/infinite-git/internal/server"
 )
 
-func TestCloneAndPull(t *testing.T) {
-	// Create temporary directories
-	serverRepoDir := t.TempDir()
-	clientRepoDir := t.TempDir()
-
-	// Initialize server repository
-	serverRepo, err := repo.New(serverRepoDir)
+func newTestServer(t *testing.T) *httptest.Server {
+	t.Helper()
+	content := &gitContent{}
+	serverRepo, err := repo.New(t.TempDir(), content.InitialFiles())
 	if err != nil {
 		t.Fatalf("failed to create server repo: %v", err)
 	}
-
-	srv := server.New(serverRepo)
-
-	// Start test server
+	srv := server.New(serverRepo, content)
 	ts := httptest.NewServer(srv.Handler())
-	defer ts.Close()
+	t.Cleanup(ts.Close)
+	return ts
+}
+
+func TestCloneAndPull(t *testing.T) {
+	ts := newTestServer(t)
+	clientRepoDir := t.TempDir()
 
 	// Clone the repository
 	gitRepo, err := git.PlainClone(clientRepoDir, false, &git.CloneOptions{
@@ -115,20 +115,7 @@ func TestCloneAndPull(t *testing.T) {
 }
 
 func TestConcurrentPulls(t *testing.T) {
-	// Create temporary directories
-	serverRepoDir := t.TempDir()
-
-	// Initialize server repository
-	serverRepo, err := repo.New(serverRepoDir)
-	if err != nil {
-		t.Fatalf("failed to create server repo: %v", err)
-	}
-
-	srv := server.New(serverRepo)
-
-	// Start test server
-	ts := httptest.NewServer(srv.Handler())
-	defer ts.Close()
+	ts := newTestServer(t)
 
 	// Clone initial repository
 	baseClientDir := t.TempDir()
@@ -199,21 +186,8 @@ func TestConcurrentPulls(t *testing.T) {
 }
 
 func TestPushRejection(t *testing.T) {
-	// Create temporary directories
-	serverRepoDir := t.TempDir()
+	ts := newTestServer(t)
 	clientRepoDir := t.TempDir()
-
-	// Initialize server repository
-	serverRepo, err := repo.New(serverRepoDir)
-	if err != nil {
-		t.Fatalf("failed to create server repo: %v", err)
-	}
-
-	srv := server.New(serverRepo)
-
-	// Start test server
-	ts := httptest.NewServer(srv.Handler())
-	defer ts.Close()
 
 	// Clone the repository
 	gitRepo, err := git.PlainClone(clientRepoDir, false, &git.CloneOptions{
